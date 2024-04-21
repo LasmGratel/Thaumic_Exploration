@@ -1,11 +1,17 @@
 package flaxbeard.thaumicexploration.block;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockContainer;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.renderer.texture.IIconRegister;
 import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.init.Blocks;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
@@ -14,13 +20,16 @@ import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import net.minecraftforge.oredict.OreDictionary;
 
-import org.apache.commons.lang3.tuple.MutablePair;
-
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import flaxbeard.thaumicexploration.ThaumicExploration;
+import flaxbeard.thaumicexploration.common.ConfigTX;
 import flaxbeard.thaumicexploration.tile.TileEntityReplicator;
+import gnu.trove.set.hash.THashSet;
+import thaumcraft.api.aspects.AspectList;
+import thaumcraft.common.config.ConfigBlocks;
 import thaumcraft.common.items.wands.ItemWandCasting;
+import thaumcraft.common.lib.crafting.ThaumcraftCraftingManager;
 import thaumcraft.common.lib.utils.InventoryUtils;
 
 public class BlockReplicator extends BlockContainer {
@@ -124,12 +133,7 @@ public class BlockReplicator extends BlockContainer {
 
                 return true;
             }
-            if (player.getCurrentEquippedItem() != null && (ThaumicExploration.allowedItems.contains(
-                    MutablePair.of(
-                            player.getCurrentEquippedItem().getItem(),
-                            player.getCurrentEquippedItem().getItemDamage()))
-                    || ThaumicExploration.allowedItems.contains(
-                            MutablePair.of(player.getCurrentEquippedItem().getItem(), OreDictionary.WILDCARD_VALUE)))) {
+            if (player.getCurrentEquippedItem() != null && isItemAllowed(player.getCurrentEquippedItem())) {
                 // IN
                 ItemStack i = player.getCurrentEquippedItem().copy();
                 i.stackSize = 0;
@@ -153,6 +157,80 @@ public class BlockReplicator extends BlockContainer {
         }
 
         return true;
+    }
+
+    private static final Set<Item> VANILLA_WOOD = new THashSet<>(
+            Arrays.asList(
+                    Item.getItemFromBlock(Blocks.wooden_slab),
+                    Item.getItemFromBlock(Blocks.birch_stairs),
+                    Item.getItemFromBlock(Blocks.oak_stairs),
+                    Item.getItemFromBlock(Blocks.jungle_stairs),
+                    Item.getItemFromBlock(Blocks.spruce_stairs),
+                    Item.getItemFromBlock(Blocks.log),
+                    Item.getItemFromBlock(Blocks.log2),
+                    Item.getItemFromBlock(Blocks.planks)));
+
+    private static final Set<Item> VANILLA_REPLICATE_ITEMS = new THashSet<>(
+            Arrays.asList(
+                    Item.getItemFromBlock(Blocks.mossy_cobblestone),
+                    Item.getItemFromBlock(Blocks.stone_slab),
+                    Item.getItemFromBlock(Blocks.sand),
+                    Item.getItemFromBlock(Blocks.sandstone),
+                    Item.getItemFromBlock(Blocks.sandstone_stairs),
+                    Item.getItemFromBlock(Blocks.brick_block),
+                    Item.getItemFromBlock(Blocks.brick_stairs),
+                    Item.getItemFromBlock(Blocks.stonebrick),
+                    Item.getItemFromBlock(Blocks.stone_brick_stairs),
+                    Item.getItemFromBlock(Blocks.nether_brick),
+                    Item.getItemFromBlock(Blocks.nether_brick_stairs),
+                    Item.getItemFromBlock(Blocks.soul_sand),
+                    Item.getItemFromBlock(Blocks.gravel),
+                    Item.getItemFromBlock(Blocks.grass),
+                    Item.getItemFromBlock(Blocks.glass),
+                    Item.getItemFromBlock(Blocks.dirt),
+                    Item.getItemFromBlock(Blocks.snow),
+                    Item.getItemFromBlock(Blocks.clay),
+                    Item.getItemFromBlock(Blocks.hardened_clay)));
+
+    private boolean isItemAllowed(ItemStack stack) {
+        AspectList ot = ThaumcraftCraftingManager.getObjectTags(stack);
+        ot = ThaumcraftCraftingManager.getBonusTags(stack, ot);
+
+        THashSet<String> oreNames = Arrays.stream(OreDictionary.getOreIDs(stack)).mapToObj(OreDictionary::getOreName)
+                .collect(Collectors.toCollection(THashSet::new));
+
+        if (oreNames.contains("logWood")) {
+            if (stack.getItem() == Item.getItemFromBlock(ConfigBlocks.blockMagicalLog)) {
+                return false;
+            }
+            return ot.getAspects().length > 0;
+        } else if (oreNames.contains("treeLeaves")) {
+            if (stack.getItem() != Item.getItemFromBlock(ConfigBlocks.blockMagicalLeaves)) {
+                return false;
+            }
+            return ot.getAspects().length > 0;
+        } else if (oreNames.contains("slabWood") || oreNames.contains("stairWood") || oreNames.contains("plankWood")) {
+            if (stack.getItem() == Item.getItemFromBlock(ConfigBlocks.blockWoodenDevice)) {
+                if (ConfigTX.allowMagicPlankReplication)
+                    return stack.getItemDamage() == 6 || stack.getItemDamage() == 7;
+                else return false;
+            }
+
+            if (ConfigTX.allowModWoodReplication) {
+                return ot.getAspects().length > 0;
+            } else {
+                return VANILLA_WOOD.contains(stack.getItem());
+            }
+        } else if (oreNames.contains("stone") || oreNames.contains("cobblestone")) {
+            if (ConfigTX.allowModStoneReplication) {
+                return ot.getAspects().length > 0;
+            } else {
+                return stack.getItem() == Item.getItemFromBlock(Blocks.stone)
+                        || stack.getItem() == Item.getItemFromBlock(Blocks.cobblestone);
+            }
+        }
+
+        return VANILLA_REPLICATE_ITEMS.contains(stack.getItem());
     }
 
     public boolean renderAsNormalBlock() {
